@@ -1,23 +1,32 @@
-+(function($, win) {
+/*
+ * swipe plugin
+ *
+ * swipe component
+ */
++((function($, win, doc) {
+	'use strict';
+	var Utils = $.fn.utils;
+	var mobileEvent = $.fn.mobileEvent;
+	function etime(){
+		return new Date().getTime();
+	}
 
 	function Swipe(container, options) {
-		"use strict";
-		this.$container = $(container);
 		this.container = container;
-		this.element = container.children[0];
 		this.options = options;
+		this.element = this.container.children[0];
 		this.index = this.options.startSlide;
-		this.translateZ = this.options.translateZ ? ' translateZ(0px)' : '';
-		this.target = this.options.bindToContainer ? this.$container : $(win);
+		this.translateZ = Utils.hasPerspective && this.options.translateZ ? ' translateZ(0px)' : '';
 		this.startPosition = {};
 		this.moveDelta = {};
 		this.events = {};
-		this.timer = null;
 		this.sizeParam = ['height', 'width'][this.options.direction === 'y' ? 0 : 1];
 		this.sizePosition = ['top', 'left'][this.options.direction === 'y' ? 0 : 1];
+		this.timer = null;
 		this.isAnimating = false;
 		this.init();
 	}
+
 	Swipe.DEFAULTS = {
 		animated: 0,
 		zoomTo: 0.9,
@@ -31,15 +40,18 @@
 		disableToNext: false,
 		translateZ: true,
 		bindToContainer: true,
-		drag: true,
 		bind: true,
 		showIcons: false,
 		iconsClass: null,
-		autoPlay: false
+		autoPlay: false,
+		maskClass: 'swipe-mask',
+		pageClass: 'swipe-page'
 	}
+
 	Swipe.prototype.disableToPrev = function() {
 		this.options.disableToPrev = true;
 	}
+
 	Swipe.prototype.enableToPrev = function() {
 		this.options.disableToPrev = false;
 	}
@@ -78,18 +90,19 @@
 		}
 	}
 	Swipe.prototype.autoPlay = function() {
+		var that = this;
 		if (this.options.autoPlay) {
 			this.closeAuto();
-			this.timer = setTimeout($.proxy(function() {
-				this.slideTo(this._circle(this.index + 1));
-				this.autoPlay();
-			}, this), this.options.autoPlay);
+			this.timer = setTimeout(function() {
+				that.slideTo(that._circle(that.index + 1));
+				that.autoPlay();
+			}, that.options.autoPlay);
 		}
 	}
 	Swipe.prototype.closeAuto = function() {
 		clearTimeout(this.timer);
 	}
-	Swipe.prototype.init= function() {
+	Swipe.prototype.init = function() {
 		this.initNodes();
 		this.initEvents();
 		this.autoPlay();
@@ -106,14 +119,22 @@
 		var pos = this.length;
 		while (pos--) {
 			var slide = this.slides[pos];
+			var page = slide.children[0];
 			var dist = this.index > pos ? -this.wraperSize : (this.index < pos ? this.wraperSize : 0);
 			slide.setAttribute('data-index', pos);
 			slide.style[this.sizeParam] = this.wraperSize + 'px';
 			slide.style[this.sizePosition] = (pos * -this.wraperSize) + 'px';
 			this._translate(slide, dist, 0);
+			if (this.options.mask) {
+				var div = doc.createElement('div');
+				div.className = this.options.mask;
+				page.appendChild(div);
+			}
 		}
 		this.initPosition();
 		this.container.style.visibility = 'visible';
+		//this.target = $(this.options.bindToContainer ? (this.options.maskClass ? '.' + this.options.maskClass : this.container) : window);
+		this.target = this.options.bindToContainer ? this.container : window;
 	}
 	Swipe.prototype.initIcons = function() {
 		var pos = this.length,
@@ -179,23 +200,30 @@
 		this.lastIndex = this.index;
 	}
 	Swipe.prototype.initEvents = function() {
-		$(win).on('resize', $.proxy(this._resize, this));
+		var that = this;
+		win.addEventListener('resize', function() {
+			that._resize();
+		}, false)
 		if (this.options.bind) {
-			this.target.on('touchstart mousedown', $.proxy(this._start, this));
-			if (this.options.drag) {
-				this.target.on('touchmove mousemove', $.proxy(this._move, this));
-			}
-			this.target.on('touchend mouseup', $.proxy(this._end, this));
+			this.target.addEventListener(mobileEvent.start, function(e) {
+				that._start(e);
+			}, false);
+			this.target.addEventListener(mobileEvent.move, function(e) {
+				that._move(e);
+			}, false);
+			this.target.addEventListener(mobileEvent.end, function(e) {
+				that._end(e);
+			}, false);
 		} else {
-			$(doc).on('touchmove', function() {
+			win.on(mobileEvent.move, function() {
 				return false;
-			})
+			}, false);
 		}
 	}
 	Swipe.prototype._circle = function(index, loop) {
 		return (arguments.length == 2 ? loop : this.options.loop) ? (this.length + (index % this.length)) % this.length : index;
 	}
-	Swipe.prototype._translate= function(slide, dist, speed) {
+	Swipe.prototype._translate = function(slide, dist, speed) {
 		var style = slide && slide.style;
 		if (style) {
 			style[Utils.style.transitionDuration] = speed + 'ms';
@@ -223,7 +251,7 @@
 	}
 	Swipe.prototype._start = function(e) {
 		if (!this.isAnimating) {
-			var touches = e.touches ? e.touches[0] : e;
+			var touches = e['targetTouches'] ? e['targetTouches'][0] : e;
 			this.startPosition = {
 				x: touches.pageX,
 				y: touches.pageY
@@ -237,14 +265,19 @@
 			this.hasMoved = false;
 			this.firstMoved = true;
 			this.disableMove = true;
+			this.time = etime();
 			this.execEvent('beforetouchStart');
 		}
 	}
 	Swipe.prototype._move = function(e) {
 		e.preventDefault();
-		e.stopPropagation();
-		if (this.isMouseDown) {
-			var touches = e.touches ? e.touches[0] : e;
+		e.stopPropagation(); 
+		/*add the time interval*/
+		var t = etime();
+		//if(t - this.time < 100) return;
+		this.time = t;
+		if (this.isMouseDown ) {
+			var touches = e['targetTouches'] ? e['targetTouches'][0] : e;
 			this.moveDelta = {
 				x: touches.pageX - this.startPosition.x,
 				y: touches.pageY - this.startPosition.y
@@ -268,18 +301,8 @@
 	Swipe.prototype._end = function(e) {
 		if (this.isMouseDown) {
 			this.isMouseDown = false;
-			if (this.options.drag) {
-				(!this.disableMove && this.hasMoved) && (this._effectEnd());
-			} else {
-				var touches = e.touches ? e.changedTouches[0] : e;
-				this.moveDelta = {
-					x: touches.pageX - this.startPosition.x,
-					y: touches.pageY - this.startPosition.y
-				};
-				this.moveDistance = this.moveDelta[this.options.direction];
-				this._effectEnd();
-			}
-			this.execEvent('touchEnd');
+			(!this.disableMove && this.hasMoved) && (this._effectEnd());
+            this.execEvent('touchEnd');
 		}
 	}
 	Swipe.prototype._effectMove = function() {
@@ -313,6 +336,7 @@
 		}
 	}
 	Swipe.prototype._effectEnd = function(distance, to, speed) {
+		var that = this;
 		var isSlide = arguments.length == 3;
 		var size, index = this.index;
 		this.isAnimating = true;
@@ -352,7 +376,9 @@
 				this._translate(this.nextPage, size + this.slidePos[this._circle(index + 1)], speed);
 				break;
 		}
-		setTimeout($.proxy(this._transitionEnd, this), speed);
+		setTimeout(function () {
+			that._transitionEnd();
+		}, speed);
 	}
 	Swipe.prototype._transitionEnd = function() {
 		this.isAnimating = false;
@@ -387,7 +413,9 @@
 				this.initPosition(num, from);
 				this.execEvent('beforeSlide', num);
 				speed = speed != undefined ? speed : this.options.speed;
-				setTimeout($.proxy(this._effectEnd, this), 20, symbol, num, speed);
+				setTimeout(function () {
+					taht._effectEnd();
+				}, 20, symbol, num, speed);
 			}
 		}
 	}
@@ -401,7 +429,7 @@
 		})
 	}
 
-	var old = $.fn.erase;
+	var old = $.fn.swipe;
 
 	$.fn.swipe = Plugin;
 	$.fn.swipe.Constructor = Swipe;
@@ -410,4 +438,4 @@
 		$.fn.swipe = old;
 		return this;
 	}
-}(jQuery, window))
+})(jQuery, window, document))

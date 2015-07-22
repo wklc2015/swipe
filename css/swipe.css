@@ -1,0 +1,75 @@
+@charset "utf-8";
+/*swipe.css*/
+
+.swipe-container {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	overflow: hidden;
+	visibility: hidden;
+}
+.swipe-wrap {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	z-index: 10;
+}
+.swipe-items {
+	position: relative;
+	width: 100%;
+	height: 100%;
+	float: left;
+	-webkit-transition-property: -webkit-transform;
+	transition-property: transform;
+	-webkit-backface-visibility: hidden;
+	backface-visibility: hidden;
+	-webkit-transform-style: preserve-3d;
+	transform-style: preserve-3d;
+}
+.swipe-items[data-slide='curr'] {
+	z-index: 2;
+}
+.swipe-items[data-slide='prev'],
+.swipe-items[data-slide='next'] {
+	z-index: 3;
+}
+.swipe-page,
+.swipe-page .swipe-mask {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+}
+.swipe-page .swipe-mask{
+	/*visibility: hidden;*/
+	z-index: 900;
+}
+.swipe-icons {
+	list-style: none;
+	position: absolute;
+	right: 5%;
+	top: 50%;
+	z-index: 11;
+	-webkit-transform: translateY(-50%);
+	transform: translateY(-50%);
+}
+.swipe-icons li {
+	text-indent: -9999px;
+	width: 10px;
+	height: 10px;
+	-webkit-border-radius: 50%;
+	border-radius: 50%;
+	background-color: #444;
+	margin-bottom: 5px;
+}
+.swipe-icons li:last-child {
+	margin-bottom: 0;
+}
+.swipe-icons li.active {
+	background-color: #ff3;
+}
